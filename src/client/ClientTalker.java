@@ -25,6 +25,7 @@ public class ClientTalker implements Runnable {
 	public void run() {
 		try {
 			output.writeObject("Yes.");
+			output.flush();
 		} catch (IOException e) {
 			logger.warning("Failed to send to server.");
 			e.printStackTrace();

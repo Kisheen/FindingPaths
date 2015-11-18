@@ -22,5 +22,8 @@ public class Client {
 		
 		Thread talker = new Thread(new ClientTalker(server));
 		talker.start();
+		
+		Thread listener = new Thread(new ClientListener(server));
+		listener.start();
 	}
 }

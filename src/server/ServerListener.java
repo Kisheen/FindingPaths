@@ -1,45 +1,48 @@
 package server;
 
 import java.io.IOException;
-import java.net.ServerSocket;
+import java.io.ObjectInputStream;
 import java.net.Socket;
-import java.net.InetAddress;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.concurrent.BlockingQueue;
 import java.util.logging.Logger;
 
 public class ServerListener implements Runnable {
+
+	Logger logger;
+	private Socket client;
+	private ObjectInputStream input;
+	private BlockingQueue<Object> inputQueue;
 	
-	private static int PORT;
-	private static ServerSocket SERVER;
-	Logger logger = Logger.getLogger(ServerListener.class.getName());
-	private Map<InetAddress, Thread> echos;
-	
-	public ServerListener(int port) {
-		PORT = port;
-		echos = new HashMap<InetAddress, Thread>();
+	public ServerListener(Socket client, BlockingQueue<Object> queue) {
+		logger = Logger.getLogger("Worker-" + client.getInetAddress());
+		logger.info("Connecting to " + client.getInetAddress());
+		this.client = client;
+		this.inputQueue = queue;
+		
+		try {
+			input = new ObjectInputStream(this.client.getInputStream());
+		} catch (IOException e) {
+			logger.warning("Failed to open input stream.");
+			e.printStackTrace();
+		}
 	}
 	
 	public void run() {
-		try {
-			SERVER = new ServerSocket(PORT);
-			
-			while(true)
-			{
-				try {
-					Socket client = SERVER.accept();
-					Thread echoServer = new Thread(new Worker(client));
-					echoServer.start();
-					echos.put(client.getInetAddress(), echoServer);
-				} catch(IOException e)
-				{
-					logger.warning("Failed connecting to client.");
-					e.printStackTrace();
-				}
+		while(true) {
+			try {
+				Object in = input.readObject();
+				logger.info("Read from client " + in);
+				inputQueue.put(in);
+			} catch (ClassNotFoundException e) {
+				logger.warning("Failed to read object.");
+				e.printStackTrace();
+			} catch (IOException e) {
+				logger.warning("Failed to receive object.");
+				e.printStackTrace();
+			} catch (InterruptedException e) {
+				logger.warning("Failed to put object in queue.");
+				e.printStackTrace();
 			}
-		} catch (IOException e) {
-			logger.warning("Failed to initialize server.");
-			e.printStackTrace();
 		}
 	}
 }
