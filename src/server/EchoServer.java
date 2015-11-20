@@ -1,6 +1,7 @@
 package server;
 
 import java.io.IOException;
+import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.InetAddress;
@@ -9,31 +10,37 @@ import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.logging.Logger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import graphics.FindingPathsGUI;
 
 public class EchoServer implements Runnable {
 	
-	private static final int PORT = 4040;
-	Logger logger = Logger.getLogger(EchoServer.class.getName());
+	Logger logger = LoggerFactory.getLogger(EchoServer.class);
+	private int port = 4040;
 	private Map<InetAddress, Thread> echos;
-	private BlockingQueue<Object> outputQueue;
-	private BlockingQueue<Object> inputQueue;
-	private CopyOnWriteArrayList<Socket> clients;
+	private BlockingQueue<Object> outputQueue, inputQueue;
+	private CopyOnWriteArrayList<ObjectOutputStream> clients;
+	private FindingPathsGUI gui;
 	Thread talker, processor;
 	
-	public EchoServer() {
+	public EchoServer(FindingPathsGUI gui, int port) {
+		this.gui = gui;
+		this.port = port;
 		echos = new HashMap<InetAddress, Thread>();
 		outputQueue = new ArrayBlockingQueue<Object>(1024);
 		inputQueue = new ArrayBlockingQueue<Object>(1024);
-		clients = new CopyOnWriteArrayList<Socket>();
+		clients = new CopyOnWriteArrayList<ObjectOutputStream>();
 	}
 	
 	public void run() {
 		try {
 			logger.info("Starting up Echo Server.");
-			ServerSocket server = new ServerSocket(PORT);
+			ServerSocket server = new ServerSocket(port);
 			ServerTalker talker = new ServerTalker(clients, outputQueue);
-			ServerProcessor processor = new ServerProcessor(inputQueue, outputQueue);
+			ServerProcessor processor = new ServerProcessor(inputQueue, outputQueue, gui);
 			
 			this.talker = new Thread(talker);
 			this.processor = new Thread(processor);
@@ -41,23 +48,38 @@ public class EchoServer implements Runnable {
 			this.talker.start();
 			this.processor.start();
 			
-			while(true)
+			while(!Thread.currentThread().isInterrupted())
 			{
 				try {
 					Socket client = server.accept();
+					ObjectOutputStream out = new ObjectOutputStream(client.getOutputStream());
+					out.flush();
 					Thread echoServer = new Thread(new ServerListener(client, inputQueue));
 					echoServer.start();
 					echos.put(client.getInetAddress(), echoServer);
-					clients.add(client);
+					clients.add(out);
 				} catch(IOException e)
 				{
-					logger.warning("Failed connecting to client.");
+					logger.warn("Failed connecting to client.");
 					e.printStackTrace();
 				}
 			}
+			
+			shutdown();
 		} catch (IOException e) {
-			logger.warning("Failed to initialize server.");
+			logger.error("Failed to initialize server.");
+			e.printStackTrace();
+		} catch(RuntimeException e) {
+			logger.error(e.getMessage());
 			e.printStackTrace();
 		}
+	}
+	
+	public void shutdown() {
+		talker.interrupt();
+		processor.interrupt();
+		
+		for(Thread echo : echos.values())
+			echo.interrupt();
 	}
 }

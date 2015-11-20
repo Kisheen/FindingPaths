@@ -1,13 +1,16 @@
 package main;
 
-import client.Client;
-import server.EchoServer;
+import graphics.FindingPathsGUI;
 
 public class Starter {
 	public static void main(String args[]){
-		Thread testServer = new Thread(new EchoServer());
-		testServer.start();
+		FindingPathsGUI gui = new FindingPathsGUI();
 		
-		Client testClient = new Client("localhost", 4040);
+		gui.initGUI();
 	}
 }
+
+
+/*
+
+*/

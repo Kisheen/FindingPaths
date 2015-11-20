@@ -5,40 +5,51 @@ import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.logging.Logger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class ServerTalker implements Runnable {
 
-	private ObjectOutputStream output;
-	Logger logger = Logger.getLogger("ServerTalker");
+	Logger logger = LoggerFactory.getLogger(ServerTalker.class);
 	private BlockingQueue<Object> outputQueue;
-	private CopyOnWriteArrayList<Socket> clients;
+	private CopyOnWriteArrayList<ObjectOutputStream> clients;
 	
-	public ServerTalker(CopyOnWriteArrayList<Socket> clients, BlockingQueue<Object> queue) {
+	public ServerTalker(CopyOnWriteArrayList<ObjectOutputStream> clients, BlockingQueue<Object> queue) {
 		this.clients = clients;
 		this.outputQueue = queue;
 	}
 	
 	public void run() {
-		while(true){
+		while(!Thread.currentThread().isInterrupted()){
 			try {
 				Object out = outputQueue.take();
-				for(Socket client : clients)
+				for(ObjectOutputStream client : clients)
 				{
 					try {
-					output = new ObjectOutputStream(client.getOutputStream());
-					output.writeObject(out);
-					output.flush();
+					client.writeObject(out);
+					client.flush();
 					} catch (IOException e) {
-						logger.warning("Failed to write to " + client.getInetAddress());
+						logger.warn("Failed to write to client.");
 						e.printStackTrace();
 					}
 				}
 			} catch (InterruptedException e) {
-				logger.warning("Failed to take from output queue.");
+				logger.error("Failed to take from output queue.");
 				e.printStackTrace();
 			}
 		}
+		
+		shutdown();
 	}
 
+	private void shutdown() {
+		for(ObjectOutputStream client : clients)
+			try {
+				client.close();
+			} catch (IOException e) {
+				logger.warn("Failed to close client socket?");
+				e.printStackTrace();
+			}
+	}
 }
